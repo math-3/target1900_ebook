@@ -1,0 +1,60 @@
+body {
+    font-family:sans-serif;
+    text-align:center;
+    background:#333;
+    color:white;
+    margin-top:50px;
+}
+
+.container {
+    max-width:800px;
+    margin:auto;
+}
+
+/* 画像とリンクを重ねるための設定 */
+.image-wrapper {
+    position:relative;
+    display:inline-block;
+    margin-top:20px;
+}
+
+img {
+    max-width:100%;
+    height:auto;
+    border:5px solid #fff;
+    display:none;
+}
+
+/* 特定のリンク（透明なボタン）のスタイル */
+#special-link {
+    position:absolute;
+    display:none;
+    /* 最初は隠す */
+    background-color:rgba(255, 255, 0, 0.3);
+    /* 開発中は色をつけると位置が分かりやすい */
+    border:2px solid yellow;
+    cursor:pointer;
+    text-decoration:none;
+    color:black;
+    font-weight:bold;
+    /* クリックしたい場所に合わせて調整 */
+    top:50px;
+    /* 上からの位置 */
+    left:100px;
+    /* 左からの位置 */
+    width:150px;
+    /* 横幅 */
+    height:50px;
+    /* 高さ */
+}
+
+input {
+    padding:8px;
+    width:60px;
+    font-size:1.1rem;
+    text-align:center;
+}
+
+.controls {
+    margin-bottom:20px;
+}

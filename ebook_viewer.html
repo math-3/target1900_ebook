@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eBook Viewer</title>
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* タッチスワイプ時のスクロール抑制 */
+        .no-select {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-900 text-slate-100 h-screen flex flex-col font-sans no-select overflow-hidden">
+
+    <!-- ヘッダー / コントロールバー -->
+    <header class="bg-slate-800/90 backdrop-blur border-b border-slate-700 shrink-0 px-4 py-2.5 shadow-lg z-20">
+        <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid font-bold fa-book-open text-indigo-400 text-xl"></i>
+                <h1 class="font-bold text-lg text-slate-200 hidden sm:inline">eBook Viewer</h1>
+            </div>
+
+            <!-- 見開きモード切り替えスイッチ ＆ フルスクリーンボタン -->
+            <div class="flex items-center gap-2">
+                <button id="twoPageToggle" class="bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-book-open-reader text-indigo-400"></i>
+                    <span id="twoPageToggleText">見開き表示</span>
+                </button>
+                <button id="fullscreenBtn" class="bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-expand text-indigo-400"></i>
+                    <span class="hidden sm:inline">全画面</span>
+                </button>
+            </div>
+
+            <!-- ページ直接入力 ＆ 制御 -->
+            <div class="flex items-center gap-3">
+                <div class="flex items-center bg-slate-700/70 rounded-lg px-3 py-1.5 border border-slate-600 focus-within:border-indigo-500 transition">
+                    <span class="text-xs text-slate-400 mr-2">Page</span>
+                    <input type="text" id="numInput" value="17"
+                           class="bg-transparent text-center text-indigo-300 font-semibold focus:outline-none text-base transition-all">
+                    <span id="pageTotalLabel" class="text-xs text-slate-400 ml-1">/ 528</span>
+                </div>
+                <button id="goBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-2 rounded-lg font-medium transition active:scale-95">
+                    移動
+                </button>
+            </div>
+
+            <!-- 範囲スライダー -->
+            <div class="w-full sm:w-48 flex items-center gap-2">
+                <input type="range" id="pageRange" min="17" max="528" value="17" 
+                       class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ表示エリア -->
+    <main class="flex-1 flex flex-col items-center justify-center p-0 relative overflow-hidden w-full bg-slate-950">
+        
+        <!-- 画像ラップ＆ナビゲーションボタン -->
+        <div class="relative w-full h-full flex items-center justify-center group overflow-hidden">
+            
+            <!-- 前へボタン (左) -->
+            <button id="prevBtn" 
+                    class="absolute left-2 z-10 bg-slate-800/80 hover:bg-indigo-600 text-white p-3 rounded-full shadow-xl transition transform hover:scale-110 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-chevron-left text-lg sm:text-xl"></i>
+            </button>
+
+            <!-- 画像表示コンテナ -->
+            <div id="viewerContainer" class="relative overflow-hidden bg-slate-950 border-0 h-full w-full flex items-center justify-center p-0">
+                <div id="imageWrapper" class="flex items-center justify-center gap-0 h-full w-full">
+                    <!-- 左画像 (2n) -->
+                    <img id="display-img-left" src="" alt="左ページ" class="h-full w-1/2 object-cover transition-opacity duration-200 opacity-0 hidden">
+                    <!-- メイン/右画像 (単ページ時はこちらを使用 / 見開き時は 2n+1) -->
+                    <img id="display-img" src="" alt="画像エリア" class="h-full w-1/2 object-cover transition-opacity duration-200 opacity-0">
+                </div>
+
+                <!-- スペシャルリンク（17ページ目の時のみ表示） -->
+                <div id="special-link-wrapper" class="absolute bottom-6 right-1/4 translate-x-1/2 transition-all duration-300 hidden z-10">
+                    <a id="special-link" href="javascript:void(0);" 
+                       class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:shadow-orange-500/30 flex items-center gap-2 transition transform hover:-translate-y-0.5 active:translate-y-0 text-sm sm:text-base border border-amber-300/30">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>50番へジャンプ</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 次へボタン (右) -->
+            <button id="nextBtn" 
+                    class="absolute right-2 z-10 bg-slate-800/80 hover:bg-indigo-600 text-white p-3 rounded-full shadow-xl transition transform hover:scale-110 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-chevron-right text-lg sm:text-xl"></i>
+            </button>
+        </div>
+    </main>
+
+    <!-- フルスクリーンオーバーレイ -->
+    <div id="fullscreenOverlay" class="fixed inset-0 bg-black z-50 hidden flex items-center justify-center select-none">
+        <!-- 閉じるボタン -->
+        <button id="closeFullscreenBtn" class="absolute top-4 right-4 text-white/70 hover:text-white bg-slate-800/60 hover:bg-slate-700 p-3 rounded-full transition z-20">
+            <i class="fa-solid fa-xmark text-2xl"></i>
+        </button>
+
+        <!-- フルスクリーンナビゲーションエリア (画面左右クリック用) -->
+        <div id="fsPrevArea" class="absolute left-0 top-0 w-1/4 h-full z-10 cursor-pointer flex items-center justify-start pl-6 opacity-0 hover:opacity-100 transition">
+            <div class="bg-slate-900/80 text-white p-4 rounded-full"><i class="fa-solid fa-chevron-left text-2xl"></i></div>
+        </div>
+        <div id="fsNextArea" class="absolute right-0 top-0 w-1/4 h-full z-10 cursor-pointer flex items-center justify-end pr-6 opacity-0 hover:opacity-100 transition">
+            <div class="bg-slate-900/80 text-white p-4 rounded-full"><i class="fa-solid fa-chevron-right text-2xl"></i></div>
+        </div>
+
+        <!-- フルスクリーン画像コンテナ -->
+        <div class="w-full h-full p-4 flex items-center justify-center">
+            <div id="fsImageWrapper" class="flex items-center justify-center gap-2 max-w-full max-h-full">
+                <img id="fs-img-left" src="" alt="全画面左ページ" class="max-h-screen w-1/2 object-contain hidden">
+                <img id="fs-img" src="" alt="全画面ページ" class="max-h-screen w-1/2 object-contain">
+            </div>
+        </div>
+    </div>
+
+    <!-- スクリプト -->
+    <script>
+        const MIN_PAGE = 17;
+        const MAX_PAGE = 528;
+
+        let n = MIN_PAGE;
+        let isTwoPageMode = true; // 見開きモードを標準（初期オン）に設定
+
+        // 画像の存在状態トラッキング
+        let leftExists = true;
+        let rightExists = true;
+
+        const img = document.getElementById('display-img');
+        const imgLeft = document.getElementById('display-img-left');
+        const fsImg = document.getElementById('fs-img');
+        const fsImgLeft = document.getElementById('fs-img-left');
+
+        const numInput = document.getElementById('numInput');
+        const pageTotalLabel = document.getElementById('pageTotalLabel');
+        const pageRange = document.getElementById('pageRange');
+        const specialLinkWrapper = document.getElementById('special-link-wrapper');
+        const specialLink = document.getElementById('special-link');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const goBtn = document.getElementById('goBtn');
+
+        const twoPageToggle = document.getElementById('twoPageToggle');
+        const twoPageToggleText = document.getElementById('twoPageToggleText');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fullscreenOverlay = document.getElementById('fullscreenOverlay');
+        const closeFullscreenBtn = document.getElementById('closeFullscreenBtn');
+
+        // 見開きボタンの初期スタイルを「見開きモードON（ボタンは単ページ切替案内）」に設定
+        twoPageToggle.classList.add('bg-indigo-600', 'border-indigo-500');
+        twoPageToggleText.textContent = "単ページ表示";
+
+        // 見開き切り替え
+        twoPageToggle.addEventListener('click', () => {
+            isTwoPageMode = !isTwoPageMode;
+            if (isTwoPageMode) {
+                twoPageToggle.classList.add('bg-indigo-600', 'border-indigo-500');
+                twoPageToggleText.textContent = "単ページ表示";
+                if (n % 2 !== 0 && (n - 1) >= MIN_PAGE) {
+                    n -= 1;
+                }
+            } else {
+                twoPageToggle.classList.remove('bg-indigo-600', 'border-indigo-500');
+                twoPageToggleText.textContent = "見開き表示";
+            }
+            updateImage(n);
+        });
+
+        // フルスクリーンモード制御
+        fullscreenBtn.addEventListener('click', openFullscreen);
+        closeFullscreenBtn.addEventListener('click', closeFullscreen);
+
+        function openFullscreen() {
+            fullscreenOverlay.classList.remove('hidden');
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+        }
+
+        function closeFullscreen() {
+            fullscreenOverlay.classList.add('hidden');
+            if (document.fullscreenElement && document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+
+        document.getElementById('fsPrevArea').addEventListener('click', pagePrev);
+        document.getElementById('fsNextArea').addEventListener('click', pageNext);
+
+        // 表示テキストの更新関数
+        function updatePageDisplayInfo() {
+            if (isTwoPageMode) {
+                let leftN = (n % 2 === 0) ? n : n - 1;
+                let rightN = leftN + 1;
+
+                // 存在するページ番号のみをリストアップ
+                let pages = [];
+                if (leftExists && leftN >= MIN_PAGE && leftN <= MAX_PAGE) pages.push(leftN);
+                if (rightExists && rightN >= MIN_PAGE && rightN <= MAX_PAGE) pages.push(rightN);
+
+                if (pages.length === 2) {
+                    numInput.value = `${pages[0]}, ${pages[1]}`;
+                    numInput.style.width = '5.5rem';
+                } else if (pages.length === 1) {
+                    numInput.value = pages[0];
+                    numInput.style.width = '3rem';
+                } else {
+                    numInput.value = (leftN >= MIN_PAGE && leftN <= MAX_PAGE) ? leftN : rightN;
+                    numInput.style.width = '3rem';
+                }
+            } else {
+                numInput.value = n;
+                numInput.style.width = '3rem';
+            }
+            pageTotalLabel.textContent = ` / ${MAX_PAGE}`;
+        }
+
+        // 画像の更新処理
+        function updateImage(newN) {
+            let targetN = parseInt(newN, 10);
+            if (isNaN(targetN)) targetN = MIN_PAGE;
+            
+            n = Math.min(Math.max(targetN, MIN_PAGE), MAX_PAGE);
+
+            // フラグの初期化
+            leftExists = true;
+            rightExists = true;
+
+            // 表示状態のリセット
+            imgLeft.style.display = '';
+            img.style.display = '';
+            fsImgLeft.style.display = '';
+            fsImg.style.display = '';
+
+            if (isTwoPageMode) {
+                // 統一ルール: 左=2n(偶数), 右=2n+1(奇数)
+                // 奇数(17など)が指定された場合は、直前の偶数(16)を左の基準として算出
+                let leftN = (n % 2 === 0) ? n : n - 1;
+                let rightN = leftN + 1;
+
+                // コンテナを左右50%（2ページ幅）のレイアウトに固定
+                imageWrapper.className = "flex items-center justify-center gap-1 h-full w-full";
+                fsImageWrapper.className = "flex items-center justify-center gap-2 w-full h-full";
+
+                // 範囲外（MIN_PAGE未満）のページ判定
+                if (leftN < MIN_PAGE) leftN = null;
+                // 範囲外（MAX_PAGE超）のページ判定
+                if (rightN > MAX_PAGE) rightN = null;
+
+                // --- 左ページ (2n) の処理 ---
+                if (leftN !== null) {
+                    const leftPath = `image/${leftN}.jpg`;
+                    imgLeft.src = leftPath;
+                    fsImgLeft.src = leftPath;
+                    imgLeft.classList.remove('invisible', 'hidden');
+                    fsImgLeft.classList.remove('invisible', 'hidden');
+                } else {
+                    leftExists = false;
+                    // 透明画像を設定し、w-1/2のスペースを常に維持
+                    const blankSvg = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="850"/>';
+                    imgLeft.src = blankSvg;
+                    fsImgLeft.src = blankSvg;
+                    imgLeft.classList.remove('hidden');
+                    fsImgLeft.classList.remove('hidden');
+                    imgLeft.classList.add('invisible');
+                    fsImgLeft.classList.add('invisible');
+                }
+
+                // --- 右ページ (2n+1) の処理 ---
+                if (rightN !== null) {
+                    const rightPath = `image/${rightN}.jpg`;
+                    img.src = rightPath;
+                    fsImg.src = rightPath;
+                    img.classList.remove('invisible', 'hidden');
+                    fsImg.classList.remove('invisible', 'hidden');
+                } else {
+                    rightExists = false;
+                    // 透明画像を設定し、w-1/2のスペースを常に維持
+                    const blankSvg = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="850"/>';
+                    img.src = blankSvg;
+                    fsImg.src = blankSvg;
+                    img.classList.remove('hidden');
+                    fsImg.classList.remove('hidden');
+                    img.classList.add('invisible');
+                    fsImg.classList.add('invisible');
+                }
+
+                // 両画像の幅を50%に揃える
+                imgLeft.className = `h-full w-1/2 object-contain object-right transition-opacity duration-200 ${leftN === null ? 'invisible' : ''}`;
+                img.className = `h-full w-1/2 object-contain object-left transition-opacity duration-200 ${rightN === null ? 'invisible' : ''}`;
+                fsImgLeft.className = `max-h-screen w-1/2 object-contain object-right ${leftN === null ? 'invisible' : ''}`;
+                fsImg.className = `max-h-screen w-1/2 object-contain object-left ${rightN === null ? 'invisible' : ''}`;
+
+            } else {
+                // 単ページ表示
+                imgLeft.classList.add('hidden');
+                fsImgLeft.classList.add('hidden');
+                imgLeft.classList.remove('invisible');
+                fsImgLeft.classList.remove('invisible');
+                
+                img.classList.remove('w-1/2', 'invisible');
+                img.classList.add('w-auto', 'h-full');
+                fsImg.classList.remove('w-1/2', 'invisible');
+                fsImg.classList.add('w-auto');
+
+                const imagePath = `image/${n}.jpg`;
+                img.src = imagePath;
+                fsImg.src = imagePath;
+            }
+
+            updatePageDisplayInfo();
+
+            img.classList.remove('opacity-0');
+            imgLeft.classList.remove('opacity-0');
+
+            pageRange.value = n;
+
+            // ボタンの有効/無効化
+            prevBtn.disabled = (n <= MIN_PAGE);
+            nextBtn.disabled = (n >= MAX_PAGE);
+
+            // 17番が表示対象に含まれる場合リンクを表示
+            let is17Visible = false;
+            if (isTwoPageMode) {
+                let leftN = (n % 2 === 0) ? n : n - 1;
+                let rightN = leftN + 1;
+                if ((leftN === 17 && leftExists) || (rightN === 17 && rightExists)) {
+                    is17Visible = true;
+                }
+            } else {
+                if (n === 17) is17Visible = true;
+            }
+
+            if (is17Visible) {
+                specialLinkWrapper.classList.remove('hidden');
+                if (isTwoPageMode) {
+                    specialLinkWrapper.className = "absolute bottom-6 right-1/4 translate-x-1/2 transition-all duration-300 z-10";
+                } else {
+                    specialLinkWrapper.className = "absolute bottom-6 left-1/2 -translate-x-1/2 transition-all duration-300 z-10";
+                }
+            } else {
+                specialLinkWrapper.classList.add('hidden');
+            }
+        }
+
+        // 画像読み込みエラー時の処理（プレースホルダー画像に置き換え）
+        imgLeft.onerror = () => {
+            if (imgLeft.classList.contains('invisible')) return;
+            leftExists = true;
+            let leftN = (n % 2 === 0) ? n : n - 1;
+            if (leftN >= MIN_PAGE && leftN <= MAX_PAGE) {
+                const placeholderUrl = `https://placehold.co/800x1200/1e293b/94a3b8?text=Page+${leftN}`;
+                imgLeft.src = placeholderUrl;
+                fsImgLeft.src = placeholderUrl;
+            }
+            updatePageDisplayInfo();
+        };
+
+        img.onerror = () => {
+            if (img.classList.contains('invisible')) return;
+            rightExists = true;
+            let targetN = n;
+            if (isTwoPageMode) {
+                let leftN = (n % 2 === 0) ? n : n - 1;
+                targetN = leftN + 1;
+            }
+            if (targetN >= MIN_PAGE && targetN <= MAX_PAGE) {
+                const placeholderUrl = `https://placehold.co/800x1200/1e293b/94a3b8?text=Page+${targetN}`;
+                img.src = placeholderUrl;
+                fsImg.src = placeholderUrl;
+            }
+            updatePageDisplayInfo();
+        };
+
+        function pagePrev() {
+            const step = isTwoPageMode ? 2 : 1;
+            if (n - step >= MIN_PAGE) {
+                updateImage(n - step);
+            } else {
+                updateImage(MIN_PAGE);
+            }
+        }
+
+        function pageNext() {
+            const step = isTwoPageMode ? 2 : 1;
+            if (n + step <= MAX_PAGE) {
+                updateImage(n + step);
+            } else {
+                updateImage(MAX_PAGE);
+            }
+        }
+
+        // 入力ボックスフォーカス時に全選択
+        numInput.addEventListener('focus', () => {
+            numInput.select();
+        });
+
+        // 50番への特別リンク
+        specialLink.addEventListener('click', () => {
+            updateImage(50);
+        });
+
+        // ボタンコントロール
+        prevBtn.addEventListener('click', pagePrev);
+        nextBtn.addEventListener('click', pageNext);
+
+        goBtn.addEventListener('click', () => {
+            updateImage(numInput.value);
+        });
+
+        numInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                updateImage(numInput.value);
+                numInput.blur();
+            }
+        });
+
+        pageRange.addEventListener('input', (e) => {
+            updateImage(e.target.value);
+        });
+
+        // キーボードショートカット
+        window.addEventListener('keydown', (e) => {
+            if (document.activeElement === numInput) return;
+
+            if (e.key === '/') {
+                e.preventDefault(); // 入力エリアへのスラッシュ入力文字の挿入を防止
+                numInput.focus();
+                return;
+            }
+
+            if (e.key === 'ArrowRight') {
+                pageNext();
+            } else if (e.key === 'ArrowLeft') {
+                pagePrev();
+            } else if (e.key === 'Home') {
+                updateImage(MIN_PAGE);
+            } else if (e.key === 'End') {
+                updateImage(MAX_PAGE);
+            } else if (e.key === 'Escape') {
+                closeFullscreen();
+            }
+        });
+
+        // タッチ・スワイプ対応
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        window.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }, { passive: true });
+
+        function handleSwipe() {
+            const threshold = 50;
+            if (touchEndX < touchStartX - threshold) {
+                pageNext();
+            }
+            if (touchEndX > touchStartX + threshold) {
+                pagePrev();
+            }
+        }
+
+        // 初期表示
+        updateImage(n);
+    </script>
+</body>
+
+</html>
